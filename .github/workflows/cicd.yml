@@ -2,7 +2,7 @@ name: cicd
 
 on:
   push:
-    branches: ["master"]
+    branches: ["master", "main"]
 
 permissions:
   contents: read
@@ -11,7 +11,6 @@ permissions:
 jobs:
   build_push_deploy:
     runs-on: self-hosted
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,14 +22,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name (lowercase)
+        run: |
+          echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
 
       - name: Apply Kubernetes manifests
         run: |
@@ -39,5 +42,5 @@ jobs:
 
       - name: Update image and wait rollout
         run: |
-          kubectl set image deployment/todo-app todo-app=ghcr.io/${{ github.repository }}:${{ github.sha }}
+          kubectl set image deployment/todo-app todo-app=${{ env.IMAGE }}:${{ github.sha }}
           kubectl rollout status deployment/todo-app
